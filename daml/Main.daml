@@ -1,0 +1,77 @@
+module Main where
+import Daml.Script
+
+type ChoresProposalId = ContractId ChoresProposal
+type ChoresContractId = ContractId ChoresContract
+
+template ChoresProposal
+    with 
+        child : Party
+        parent : Party
+        chore : Text
+        note : Text
+    where
+        signatory child
+        observer parent
+        --Proposal 
+        choice Propose : ChoresProposalId
+            controller child
+                do create this 
+        --Revise
+        choice Revise : ChoresProposalId
+            with
+                revision: Text
+                feedBackText : Text
+            controller child
+            do create this with
+                chore = revision
+                note = feedBackText
+
+        choice Reject : ChoresProposalId
+            with 
+                feedBack : Text
+            controller parent
+            do create this with
+                note  = feedBack 
+            
+        choice Accept : ChoresContractId
+            controller parent
+            do create ChoresContract with
+                parentInContract = parent 
+                childInContract = child
+                childName = chore
+
+
+template ChoresContract 
+    with
+        parentInContract : Party
+        childInContract : Party
+        childName : Text 
+    where
+        signatory  parentInContract,childInContract 
+
+        
+setup : Script ChoresContractId = script do 
+    bolu <- allocateParty "Bolu"
+    peter <- allocateParty "Peter"
+
+    peterProposal <- submit peter do 
+        createCmd ChoresProposal with
+            child = peter
+            parent = bolu 
+            chore = "Wash all the plate for you to buy me PS5"
+            note = "Please i want to play games with all my free time "
+
+    boluRejectProposal <- submit bolu do
+        exerciseCmd peterProposal Reject
+            with feedBack = "You must be high on something, you'll the plate to stay under my roof"
+
+    peterProposal2 <- submit peter do
+        exerciseCmd boluRejectProposal Revise
+            with 
+                revision = "Wash all the plate for you to let me play on your phone"
+                feedBackText = "Ya wicked sha, Oya agree to the one oo *rolling eye emoji* "
+
+    submit bolu do 
+        exerciseCmd peterProposal2 Accept
+
